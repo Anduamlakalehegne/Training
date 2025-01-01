@@ -1,102 +1,95 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-
-interface User {
-  id: string
-  name: string
-  email: string
-  age?: number
-}
+import { useState } from 'react'
+import { useVehicles } from '@/hooks/useVehicles'
+import { VehicleTable } from '@/components/VehicleTable'
+import { VehicleForm } from '@/components/VehicleForm'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
 export default function Home() {
-  const [users, setUsers] = useState<User[]>([])
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [age, setAge] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const { vehicles, isLoading, error, mutate } = useVehicles()
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingVehicle, setEditingVehicle] = useState<any>(null)
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
-
-  const fetchUsers = async () => {
+  const handleCreate = async (data: { name: string; status: string }) => {
     try {
-      const response = await fetch('/api/users')
-      if (!response.ok) {
-        throw new Error('Failed to fetch users')
-      }
-      const data = await response.json()
-      setUsers(data)
-    } catch (error) {
-      console.error('Error fetching users:', error)
-      setError('Failed to fetch users. Please try again.')
-    }
-  }
-
-  const createUser = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    try {
-      const response = await fetch('/api/users', {
+      const response = await fetch('/api/vehicles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, age }),
+        body: JSON.stringify(data),
       })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create user')
-      }
-      console.log('User created:', data)
-      setName('')
-      setEmail('')
-      setAge('')
-      fetchUsers()
+      if (!response.ok) throw new Error('Failed to create vehicle')
+      setIsDialogOpen(false)
+      mutate()
     } catch (error) {
-      console.error('Error creating user:', error)
-      setError(error instanceof Error ? error.message : 'Failed to create user. Please try again.')
+      console.error('Error creating vehicle:', error)
     }
   }
 
+  const handleUpdate = async (data: { name: string; status: string }) => {
+    try {
+      const response = await fetch('/api/vehicles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, id: editingVehicle.id }),
+      })
+      if (!response.ok) throw new Error('Failed to update vehicle')
+      setIsDialogOpen(false)
+      setEditingVehicle(null)
+      mutate()
+    } catch (error) {
+      console.error('Error updating vehicle:', error)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this vehicle?')) return
+    try {
+      const response = await fetch('/api/vehicles', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      if (!response.ok) throw new Error('Failed to delete vehicle')
+      mutate()
+    } catch (error) {
+      console.error('Error deleting vehicle:', error)
+    }
+  }
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error}</div>
+
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">User Management</h1>
-      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-      <form onSubmit={createUser} className="mb-4">
-        <input
-          type="text"
-          placeholder="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="border p-2 mr-2"
-          required
-        />
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="border p-2 mr-2"
-          required
-        />
-        <input
-          type="number"
-          placeholder="Age"
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
-          className="border p-2 mr-2"
-        />
-        <button type="submit" className="bg-blue-500 text-white p-2">
-          Add User
-        </button>
-      </form>
-      <ul>
-        {users.map((user) => (
-          <li key={user.id} className="mb-2">
-            {user.name} ({user.email}) {user.age && `- ${user.age}`}
-          </li>
-        ))}
-      </ul>
+    <div className="container mx-auto py-10">
+      <h1 className="text-2xl font-bold mb-5">Vehicle Management Dashboard</h1>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogTrigger asChild>
+          <Button className="mb-4">Add New Vehicle</Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
+          </DialogHeader>
+          <VehicleForm
+            initialData={editingVehicle}
+            onSubmit={editingVehicle ? handleUpdate : handleCreate}
+            onCancel={() => {
+              setIsDialogOpen(false)
+              setEditingVehicle(null)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+      <VehicleTable
+        vehicles={vehicles}
+        onEdit={(vehicle) => {
+          setEditingVehicle(vehicle)
+          setIsDialogOpen(true)
+        }}
+        onDelete={handleDelete}
+      />
     </div>
   )
 }
